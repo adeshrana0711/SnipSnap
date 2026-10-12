@@ -1,149 +1,201 @@
-require('dotenv').config();
-const express = require('express');
-const path = require('path');
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
+require("dotenv").config();
 
-const shop = require('./models/Shop');
-const Appointment = require('./models/appointment');
+const express = require("express");
+const path = require("path");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+
+const Shop = require("./models/Shop");
+const Appointment = require("./models/appointment");
+const Barber = require("./models/Barber");
+const Client = require("./models/Client");
+
 const barberRoutes = require("./routes/barberRoutes");
-const Barber = require('./models/Barber');
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const slotRoutes = require("./routes/slots");
 const googleAuthRoutes = require("./routes/googleAuth");
 
-require('./config/db');
+require("./config/db");
 require("./config/passport");
-const auth = require('./middlewares/auth');
-const barberLoginRoute = require('./routes/shopLogin');
-const clientLoginRoute = require('./routes/LoginClient');
 
-const barberRegisterRoute = require('./routes/regisbarber');
-const clientRegisterRoute = require('./routes/regisClient');
+const auth = require("./middlewares/auth");
+const barberLoginRoute = require("./routes/shopLogin");
+const clientLoginRoute = require("./routes/LoginClient");
+const barberRegisterRoute = require("./routes/regisbarber");
+const clientRegisterRoute = require("./routes/regisClient");
 const shopRoutes = require("./routes/shop");
 const clientBookingsRoute = require("./routes/clientBookings");
-const Client = require("./models/Client")
 const upload = require("./middlewares/upload");
 
 const app = express();
-const port = 3000;
 
+// Middleware
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, '..', 'client', 'dist')));
-app.use("/uploads", express.static("public/uploads"));
+
+// Static files (useful when running locally)
+app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
+
+// API routes
 app.use("/api/barbers", barberRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
+
 app.use("/shop", shopRoutes);
+
 app.use("/client", clientLoginRoute);
 app.use("/client", clientRegisterRoute);
+
 app.use("/appointment", appointmentRoutes);
 app.use("/client/bookings", clientBookingsRoute);
+
 app.use("/api", slotRoutes);
 app.use("/auth", googleAuthRoutes);
 
-app.get('/logout',(req,res)=>{
-    res.clearCookie("token");
-    if (req.accepts("json") && !req.accepts("html")) {
-        return res.json({ success: true });
-    }
-    res.redirect("/");
+// Logout
+app.get("/logout", (req, res) => {
+  res.clearCookie("token");
+
+  if (req.accepts("json") && !req.accepts("html")) {
+    return res.json({ success: true });
+  }
+
+  return res.redirect("/");
 });
 
-app.get("/me", async (req,res)=>{
-    try{
-        const token = req.cookies.token;
-
-        if(!token){
-            return res.json({loggedIn:false});
-        }
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "SECRET_KEY");
-        let user = null;
-
-        if(decoded.role == "client"){
-            user = await Client.findById(decoded.id);
-        }
-        if(decoded.role == "shop"){
-            user = await shop.findById(decoded.id);
-        }
-
-        if(!user){
-            return res.json({loggedIn:false});
-        }
-
-        res.json({
-            loggedIn:true,
-            role:decoded.role,
-            name:user.name,
-            email:user.email,
-            wallet:user?.wallet || 0,
-            image:user?.image || null
-        });
-
-    }catch(err){
-        res.json({loggedIn:false});
-    }
-});
-app.get("/client/stats",auth("client"),async (req,res)=>{
-    try{
-        const booking = await Appointment.countDocuments({
-            client:req.user.id
-        })
-        res.json({booking});
-    }catch(error){
-        res.send("Server Error");
-    }
-})
-app.get("/api/profile", auth("client"), async (req,res)=>{
-
-try{
-
-const user = await Client.findById(req.user.id);
-
-res.json(user);
-
-}catch(err){
-
-console.error(err);
-res.status(500).json({error:"Server error"});
-
-}
-
-});
-app.put("/api/profile",auth("client"),async(req,res)=>{
-    const {name,phone} = req.body;
-    const user = await Client.findById(req.user.id);
-
-    user.name = name;
-    user.phone = phone;
-    
-    await user.save();
-    res.json(user);
-})
-
-app.post("/api/profile/image",auth("client"),upload.single("image"),async(req,res)=>{
-
-    const user = await Client.findById(req.user.id);
-    user.image = "/uploads/users/" + req.file.filename;
-    await user.save();
-    res.json({image:user.image});
-});
-
-app.patch("/availability/:id", auth("shop"), async (req, res) => {
-
+// Check login status
+app.get("/me", async (req, res) => {
   try {
+    const token = req.cookies.token;
 
+    if (!token) {
+      return res.json({ loggedIn: false });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "SECRET_KEY"
+    );
+
+    let user = null;
+
+    if (decoded.role === "client") {
+      user = await Client.findById(decoded.id);
+    } else if (decoded.role === "shop") {
+      user = await Shop.findById(decoded.id);
+    }
+
+    if (!user) {
+      return res.json({ loggedIn: false });
+    }
+
+    return res.json({
+      loggedIn: true,
+      role: decoded.role,
+      name: user.name,
+      email: user.email,
+      wallet: user.wallet || 0,
+      image: user.image || null,
+    });
+  } catch (error) {
+    console.error("Login status error:", error.message);
+    return res.json({ loggedIn: false });
+  }
+});
+
+// Client statistics
+app.get("/client/stats", auth("client"), async (req, res) => {
+  try {
+    const booking = await Appointment.countDocuments({
+      client: req.user.id,
+    });
+
+    return res.json({ booking });
+  } catch (error) {
+    console.error("Client stats error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get client profile
+app.get("/api/profile", auth("client"), async (req, res) => {
+  try {
+    const user = await Client.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "Client not found" });
+    }
+
+    return res.json(user);
+  } catch (error) {
+    console.error("Get profile error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Update client profile
+app.put("/api/profile", auth("client"), async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+    const user = await Client.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "Client not found" });
+    }
+
+    if (name !== undefined) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+
+    await user.save();
+
+    return res.json(user);
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Upload client profile image
+app.post(
+  "/api/profile/image",
+  auth("client"),
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No image uploaded" });
+      }
+
+      const user = await Client.findById(req.user.id);
+
+      if (!user) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      user.image = "/uploads/users/" + req.file.filename;
+      await user.save();
+
+      return res.json({ image: user.image });
+    } catch (error) {
+      console.error("Profile image error:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Update barber availability
+app.patch("/availability/:id", auth("shop"), async (req, res) => {
+  try {
     const { start, end } = req.body;
 
     const barber = await Barber.findOne({
       _id: req.params.id,
-      shop: req.user.id
+      shop: req.user.id,
     });
 
     if (!barber) {
-      return res.status(404).send("Barber not found");
+      return res.status(404).json({ message: "Barber not found" });
     }
 
     barber.workingHours.start = start;
@@ -151,39 +203,45 @@ app.patch("/availability/:id", auth("shop"), async (req, res) => {
 
     await barber.save();
 
-    res.json(barber);
-
+    return res.json(barber);
   } catch (error) {
-
-    console.error(error);
-    res.status(500).send("Server Error");
-
+    console.error("Availability update error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
-
-});
-app.get('/shops/:id', async (req,res)=>{
-
-try{
-
-const shop = await Shop.findById(req.params.id);
-
-if(!shop){
-return res.status(404).send("Shop not found");
-}
-
-res.json(shop);
-
-}catch(err){
-
-res.status(500).send("Server error");
-
-}
 });
 
-app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'client', 'dist', 'index.html'));
+// Get shop by ID
+app.get("/shops/:id", async (req, res) => {
+  try {
+    const shopData = await Shop.findById(req.params.id);
+
+    if (!shopData) {
+      return res.status(404).json({ message: "Shop not found" });
+    }
+
+    return res.json(shopData);
+  } catch (error) {
+    console.error("Get shop error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 });
 
-app.listen(port, () => {
+// API fallback: do not return index.html for missing API routes
+app.use((req, res) => {
+  return res.status(404).json({
+    message: "API route not found",
+    path: req.originalUrl,
+  });
+});
+
+// Export for Vercel
+module.exports = app;
+
+// Run locally using: node server.js
+if (require.main === module) {
+  const port = process.env.PORT || 3000;
+
+  app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
-});
+  });
+}

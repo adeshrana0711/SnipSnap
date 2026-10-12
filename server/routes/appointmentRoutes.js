@@ -7,32 +7,307 @@ const Client = require("../models/Client");
 const auth = require("../middlewares/auth");
 const sendEmail = require("../utils/sendEmail");
 
+const Razorpay = require("razorpay");
+const crypto = require("crypto");
+
+const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+const ADVANCE_AMOUNT  = Number(process.env.ADVANCE_AMOUNT || 100);
+
+async function removeExpiredReservations() {
+  await Appointment.deleteMany({
+    status: "PendingPayment",
+    expiresAt: { $lte: new Date() },
+  });
+}
+
 
 router.get("/:barberId/booked", async (req, res) => {
-    try {
+  try {
+    await removeExpiredReservations();
+    const { barberId } = req.params;
+    const { date } = req.query;
 
-        const { barberId } = req.params;
-        const { date } = req.query;
-
-        if (!date) {
-            return res.status(400).send("Date required");
-        }
-
-        const bookings = await Appointment.find({
-            barber: barberId,
-            date: date
-        });
-
-        const bookedSlots = bookings.map(b => b.time);
-
-        res.json(bookedSlots);
-
-    } catch (err) {
-
-        console.error("Booked Slot Error:", err);
-        res.status(500).send("Server Error");
-
+    if (!date) {
+      return res.status(400).json({ message: "Date required" });
     }
+
+    const start = new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(`${date}T23:59:59.999Z`);
+
+    const bookings = await Appointment.find({
+      barber: barberId,
+      date: { $gte: start, $lte: end },
+      status: { $in: ["PendingPayment", "Booked", "Completed"] },
+    }).select("time");
+
+    res.json(bookings.map((booking) => booking.time));
+  } catch (err) {
+    console.error("Booked slots error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.post("/:barberId/create-order", auth("client"), async (req, res) => {
+  let appointment;
+
+  try {
+    await removeExpiredReservations();
+
+    const { barberId } = req.params;
+    const { date, time } = req.body;
+    const clientId = req.user.id;
+
+    if (!date || !time) {
+      return res.status(400).json({ message: "Date and time required" });
+    }
+
+    const selectedDate = new Date(`${date}T00:00:00.000Z`);
+
+    if (
+      Number.isNaN(selectedDate.getTime()) ||
+      selectedDate.toISOString().slice(0, 10) !== date
+    ) {
+      return res.status(400).json({ message: "Invalid date" });
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (date < today) {
+      return res.status(400).json({ message: "Cannot book a past date" });
+    }
+
+    const barber = await Barber.findById(barberId);
+    if (!barber) {
+      return res.status(404).json({ message: "Barber not found" });
+    }
+
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({ message: "Client not found" });
+    }
+
+    const existingClientBooking = await Appointment.findOne({
+      client: clientId,
+      date: selectedDate,
+      status: { $in: ["PendingPayment", "Booked", "Completed"] },
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (existingClientBooking) {
+      return res.status(400).json({
+        message: "You already have an appointment on this date",
+      });
+    }
+
+    // The unique index prevents competing reservations for the same slot.
+    appointment = await Appointment.create({
+      barber: barberId,
+      client: clientId,
+      date: selectedDate,
+      time,
+      status: "PendingPayment",
+      paymentStatus: "Pending",
+      advanceAmount: ADVANCE_AMOUNT,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    const order = await razorpay.orders.create({
+      amount: ADVANCE_AMOUNT,
+      currency: "INR",
+      receipt: appointment._id.toString(),
+      notes: {
+        appointmentId: appointment._id.toString(),
+        clientId: clientId.toString(),
+      },
+    });
+
+    appointment.razorpayOrderId = order.id;
+    await appointment.save();
+
+    res.json({
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID,
+      appointmentId: appointment._id,
+      barberName: barber.name,
+      date,
+      time,
+      customerName: client.name,
+      customerEmail: client.email,
+    });
+  } catch (err) {
+    // Duplicate key means another customer reserved the slot first.
+    if (err.code === 11000) {
+      return res.status(409).json({
+        message: "This slot is already reserved or booked. Choose another.",
+      });
+    }
+
+    if (appointment) {
+      await Appointment.deleteOne({
+        _id: appointment._id,
+        status: "PendingPayment",
+      }).catch(console.error);
+    }
+
+    console.error("Create order error:", err);
+    res.status(500).json({ message: "Could not create payment order" });
+  }
+});
+
+/* STEP 2: VERIFY PAYMENT AND CONFIRM BOOKING */
+router.post("/verify-payment", auth("client"), async (req, res) => {
+  try {
+    const {
+      appointmentId,
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = req.body;
+
+    if (
+      !appointmentId ||
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature
+    ) {
+      return res.status(400).json({ message: "Payment details missing" });
+    }
+
+    const appointment = await Appointment.findOne({
+      _id: appointmentId,
+      client: req.user.id,
+      razorpayOrderId: razorpay_order_id,
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+
+    // Idempotency: don't send another confirmation for an already-paid booking.
+    if (
+      appointment.status === "Booked" &&
+      appointment.paymentStatus === "Paid" &&
+      appointment.razorpayPaymentId === razorpay_payment_id
+    ) {
+      return res.json({
+        success: true,
+        message: "Payment successful. Booking confirmed!",
+      });
+    }
+
+    if (
+      appointment.status !== "PendingPayment" ||
+      appointment.expiresAt <= new Date()
+    ) {
+      return res.status(400).json({
+        message: "Reservation expired. Please select the slot again.",
+      });
+    }
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    const received = Buffer.from(razorpay_signature, "hex");
+    const expected = Buffer.from(expectedSignature, "hex");
+
+    if (
+      received.length !== expected.length ||
+      !crypto.timingSafeEqual(received, expected)
+    ) {
+      return res.status(400).json({ message: "Invalid payment signature" });
+    }
+
+    // Verify payment details directly with Razorpay too.
+    const payment = await razorpay.payments.fetch(razorpay_payment_id);
+
+    if (
+      payment.order_id !== razorpay_order_id ||
+      payment.amount !== ADVANCE_AMOUNT ||
+      payment.currency !== "INR" ||
+      payment.status !== "captured"
+    ) {
+      return res.status(400).json({
+        message: "Payment is not captured or does not match this booking",
+      });
+    }
+
+    // Atomic update: only one verification can claim this pending booking.
+    const confirmed = await Appointment.findOneAndUpdate(
+      {
+        _id: appointment._id,
+        client: req.user.id,
+        status: "PendingPayment",
+        paymentStatus: "Pending",
+        expiresAt: { $gt: new Date() },
+      },
+      {
+        $set: {
+          status: "Booked",
+          paymentStatus: "Paid",
+          razorpayPaymentId: razorpay_payment_id,
+          expiresAt: null,
+        },
+      },
+      { new: true }
+    );
+
+    if (!confirmed) {
+      return res.status(409).json({
+        message: "Reservation expired or has already been processed",
+      });
+    }
+
+    // Send confirmation email after payment verification.
+    try {
+      const client = await Client.findById(confirmed.client);
+      const barber = await Barber.findById(confirmed.barber).populate("shop");
+
+      if (client?.email && barber) {
+        await sendEmail(
+          client.email,
+          "SnipSnap - Payment Successful & Booking Confirmed",
+          `
+            <div style="font-family:Arial,sans-serif;padding:24px;color:#222">
+              <h2 style="color:#16803c">Payment Successful!</h2>
+              <p>Hello ${client.name || "Customer"},</p>
+              <p>Your SnipSnap appointment is confirmed.</p>
+              <p><b>Shop:</b> ${barber.shop?.name || "N/A"}</p>
+              <p><b>Barber:</b> ${barber.name}</p>
+              <p><b>Date:</b> ${confirmed.date.toISOString().slice(0, 10)}</p>
+              <p><b>Time:</b> ${confirmed.time}</p>
+              <p><b>Booking fee paid:</b> ₹1</p>
+              <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
+              <p>Thank you for choosing SnipSnap!</p>
+            </div>
+          `
+        );
+      }
+    } catch (emailErr) {
+      // Payment is already verified; email failure must not undo the booking.
+      console.error("Confirmation email error:", emailErr);
+    }
+
+    res.json({
+      success: true,
+      message: "Payment successful. Booking confirmed!",
+      appointment: {
+        id: confirmed._id,
+        date: confirmed.date.toISOString().slice(0, 10),
+        time: confirmed.time,
+        advancePaid: 1,
+      },
+    });
+  } catch (err) {
+    console.error("Payment verification error:", err);
+    res.status(500).json({ message: "Could not verify payment" });
+  }
 });
 
 // ===========================
