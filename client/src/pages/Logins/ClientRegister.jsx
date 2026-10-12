@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import "../../styles/regisClient.css";
+import { apiFetch } from "../../api";
 
 const ClientRegister = () => {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ const ClientRegister = () => {
     };
 
     try {
-      const res = await fetch("/client/registration", {
+      const res = await apiFetch("/client/registration", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

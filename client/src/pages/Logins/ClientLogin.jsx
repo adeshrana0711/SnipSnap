@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import "../../styles/loginClient.css";
+import { apiFetch } from "../../api";
 
 const ClientLogin = () => {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ const ClientLogin = () => {
     setLoading(true);
 
     try {
-      const res = await fetch("/client/login", {
+      const res = await apiFetch("/client/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,10 +1,36 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-mongoose.connect("mongodb://localhost:27017/barber", )
-        .then(()=> console.log("MongoDb connected"))
-        .catch((err)=> console.log(err));
+let connectionPromise = null;
 
+async function connectDB() {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
 
+  if (connectionPromise) {
+    return connectionPromise;
+  }
 
+  const mongoUri = process.env.MONGODB_URI;
 
-        //mongodb+srv:adeshrana0711_db_user//:q1f6bEaBpmWk5Ymk@cluster0.v4zfoje.mongodb.net/?appName=Cluster0
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI is not configured");
+  }
+
+  connectionPromise = mongoose
+    .connect(mongoUri)
+    .then(() => {
+      console.log("MongoDB connected");
+      return mongoose.connection;
+    })
+    .catch((error) => {
+      connectionPromise = null;
+      console.error("MongoDB connection failed:", error.message);
+      throw error;
+    });
+
+  return connectionPromise;
+}
+
+module.exports = connectDB;
+
