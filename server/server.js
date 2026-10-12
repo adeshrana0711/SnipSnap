@@ -31,6 +31,29 @@ const app = express();
 
 app.set("trust proxy", 1);
 
+// Validate all route imports before mounting them.
+const routesToCheck = {
+  barberRoutes,
+  appointmentRoutes,
+  slotRoutes,
+  googleAuthRoutes,
+  barberLoginRoute,
+  clientLoginRoute,
+  barberRegisterRoute,
+  clientRegisterRoute,
+  shopRoutes,
+  clientBookingsRoute,
+};
+
+for (const [name, route] of Object.entries(routesToCheck)) {
+  if (typeof route !== "function") {
+    throw new TypeError(
+      `Invalid Express router: ${name}. Check its module.exports.`
+    );
+  }
+}
+
+// CORS configuration
 const allowedOrigins = [
   process.env.CLIENT_URL,
   "http://localhost:5173",
@@ -59,26 +82,47 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Uploads are served from this directory when persistent storage exists.
-// Vercel's function filesystem is not persistent storage for user uploads.
+// Connect to MongoDB before processing database-dependent routes.
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    return next();
+  } catch (error) {
+    console.error("Database connection error:", error.message);
+
+    return res.status(503).json({
+      success: false,
+      message: "Database unavailable",
+    });
+  }
+});
+
+// Serve existing uploads if available.
+// Vercel's function filesystem is not persistent storage.
 app.use("/uploads", express.static("public/uploads"));
 
-// Routes
+// Application routes
 app.use("/api/barbers", barberRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
+
 app.use("/shop", shopRoutes);
+
 app.use("/client", clientLoginRoute);
 app.use("/client", clientRegisterRoute);
+
 app.use("/appointment", appointmentRoutes);
 app.use("/client/bookings", clientBookingsRoute);
+
 app.use("/api", slotRoutes);
 app.use("/auth", googleAuthRoutes);
 
+// Logout
 app.get("/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
@@ -90,6 +134,7 @@ app.get("/logout", (req, res) => {
   return res.json({ success: true });
 });
 
+// Login status
 app.get("/me", async (req, res) => {
   try {
     const token = req.cookies.token;
@@ -98,14 +143,15 @@ app.get("/me", async (req, res) => {
       return res.json({ loggedIn: false });
     }
 
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is missing");
+
       return res.status(500).json({
-        message: "JWT_SECRET is not configured",
+        message: "Authentication configuration error",
       });
     }
 
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     let user = null;
 
@@ -133,6 +179,7 @@ app.get("/me", async (req, res) => {
   }
 });
 
+// Client statistics
 app.get("/client/stats", auth("client"), async (req, res) => {
   try {
     const booking = await Appointment.countDocuments({
@@ -141,32 +188,44 @@ app.get("/client/stats", auth("client"), async (req, res) => {
 
     return res.json({ booking });
   } catch (error) {
-    console.error("Client stats error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Client stats error:", error.message);
+
+    return res.status(500).json({
+      message: "Could not load client statistics",
+    });
   }
 });
 
+// Get client profile
 app.get("/api/profile", auth("client"), async (req, res) => {
   try {
     const user = await Client.findById(req.user.id);
 
     if (!user) {
-      return res.status(404).json({ message: "Client not found" });
+      return res.status(404).json({
+        message: "Client not found",
+      });
     }
 
     return res.json(user);
   } catch (error) {
-    console.error("Get profile error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Get profile error:", error.message);
+
+    return res.status(500).json({
+      message: "Could not load profile",
+    });
   }
 });
 
+// Update client profile
 app.put("/api/profile", auth("client"), async (req, res) => {
   try {
     const user = await Client.findById(req.user.id);
 
     if (!user) {
-      return res.status(404).json({ message: "Client not found" });
+      return res.status(404).json({
+        message: "Client not found",
+      });
     }
 
     const { name, phone } = req.body;
@@ -178,11 +237,15 @@ app.put("/api/profile", auth("client"), async (req, res) => {
 
     return res.json(user);
   } catch (error) {
-    console.error("Update profile error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Update profile error:", error.message);
+
+    return res.status(500).json({
+      message: "Could not update profile",
+    });
   }
 });
 
+// Upload client profile image
 app.post(
   "/api/profile/image",
   auth("client"),
@@ -190,26 +253,28 @@ app.post(
   async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: "No image uploaded" });
+        return res.status(400).json({
+          message: "No image uploaded",
+        });
       }
 
-      const user = await Client.findById(req.user.id);
-
-      if (!user) {
-        return res.status(404).json({ message: "Client not found" });
-      }
-
-      user.image = "/uploads/users/" + req.file.filename;
-      await user.save();
-
-      return res.json({ image: user.image });
+      // Memory storage supplies a buffer, not a persistent file path.
+      // Upload req.file.buffer to persistent storage before saving the URL.
+      return res.status(501).json({
+        message:
+          "Profile image storage must be configured for deployment.",
+      });
     } catch (error) {
-      console.error("Profile image error:", error);
-      return res.status(500).json({ message: "Server error" });
+      console.error("Profile image error:", error.message);
+
+      return res.status(500).json({
+        message: "Could not upload profile image",
+      });
     }
   }
 );
 
+// Update barber availability
 app.patch("/availability/:id", auth("shop"), async (req, res) => {
   try {
     const { start, end } = req.body;
@@ -220,7 +285,9 @@ app.patch("/availability/:id", auth("shop"), async (req, res) => {
     });
 
     if (!barber) {
-      return res.status(404).json({ message: "Barber not found" });
+      return res.status(404).json({
+        message: "Barber not found",
+      });
     }
 
     barber.workingHours.start = start;
@@ -230,27 +297,36 @@ app.patch("/availability/:id", auth("shop"), async (req, res) => {
 
     return res.json(barber);
   } catch (error) {
-    console.error("Availability update error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Availability update error:", error.message);
+
+    return res.status(500).json({
+      message: "Could not update availability",
+    });
   }
 });
 
+// Get shop by ID
 app.get("/shops/:id", async (req, res) => {
   try {
     const shop = await Shop.findById(req.params.id);
 
     if (!shop) {
-      return res.status(404).json({ message: "Shop not found" });
+      return res.status(404).json({
+        message: "Shop not found",
+      });
     }
 
     return res.json(shop);
   } catch (error) {
-    console.error("Get shop error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Get shop error:", error.message);
+
+    return res.status(500).json({
+      message: "Could not load shop",
+    });
   }
 });
 
-// JSON response instead of returning the frontend's index.html
+// JSON 404 for unmatched backend routes
 app.use((req, res) => {
   return res.status(404).json({
     message: "API route not found",
@@ -258,19 +334,10 @@ app.use((req, res) => {
   });
 });
 
-// Connect to MongoDB before serving API requests.
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error("Database unavailable:", error.message);
-    res.status(503).json({ message: "Database unavailable" });
-  }
-});
-
 module.exports = app;
 
+// Local development only.
+// Vercel imports the exported Express app.
 if (require.main === module) {
   const port = process.env.PORT || 3000;
 
