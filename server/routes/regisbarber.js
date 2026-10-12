@@ -4,31 +4,28 @@ const router = express.Router();
 const Shop = require("../models/Shop");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 
-const uploadDir = path.join(
-  process.cwd(),
-  "public",
-  "uploads",
-  "shops"
-);
+const storage = multer.memoryStorage();
 
-fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB
   },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
 
-  filename: function (req, file, cb) {
-    const uniqueName =
-      Date.now() + path.extname(file.originalname);
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Only JPG, PNG and WEBP images are allowed"));
+    }
 
-    cb(null, uniqueName);
+    cb(null, true);
   },
 });
-
-const upload = multer({ storage });
 
 router.post(
   "/registration",
@@ -80,8 +77,10 @@ router.post(
         });
       }
 
+      const normalizedEmail = email.trim().toLowerCase();
+
       const existingShop = await Shop.findOne({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
       });
 
       if (existingShop) {
@@ -91,24 +90,23 @@ router.post(
         });
       }
 
-      const imagePath = req.file
-        ? "/uploads/shops/" + req.file.filename
-        : "";
+      // Image bytes are in req.file.buffer.
+      // Upload them to persistent cloud storage before saving an image URL.
+      // Do not save a local /uploads path on Vercel.
+      const imagePath = "";
 
       const newShop = new Shop({
         name: name.trim(),
         owner_name,
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         phone,
         password,
         location: location.trim(),
         city: city.trim(),
-
         coordinates: {
           type: "Point",
           coordinates: [lng, lat],
         },
-
         image: imagePath,
       });
 
