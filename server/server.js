@@ -31,7 +31,7 @@ const app = express();
 
 app.set("trust proxy", 1);
 
-// Validate all route imports before mounting them.
+// Validate router imports before app.use().
 const routesToCheck = {
   barberRoutes,
   appointmentRoutes,
@@ -46,14 +46,22 @@ const routesToCheck = {
 };
 
 for (const [name, route] of Object.entries(routesToCheck)) {
-  if (typeof route !== "function") {
+  const valid =
+    typeof route === "function" &&
+    Array.isArray(route.stack);
+
+  console.log(
+    `[Route check] ${name}: ${valid ? "VALID" : "INVALID"}`
+  );
+
+  if (!valid) {
     throw new TypeError(
-      `Invalid Express router: ${name}. Check its module.exports.`
+      `Invalid Express router: ${name}. Check its export and import.`
     );
   }
 }
 
-// CORS configuration
+// CORS
 const allowedOrigins = [
   process.env.CLIENT_URL,
   "http://localhost:5173",
@@ -82,12 +90,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Connect to MongoDB before processing database-dependent routes.
+// Connect to MongoDB before any route that uses the database.
 app.use(async (req, res, next) => {
   try {
     await connectDB();
@@ -102,11 +109,11 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Serve existing uploads if available.
-// Vercel's function filesystem is not persistent storage.
+// Existing uploads, if present.
+// Do not rely on Vercel's filesystem for persistent uploads.
 app.use("/uploads", express.static("public/uploads"));
 
-// Application routes
+// Routes
 app.use("/api/barbers", barberRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
@@ -144,7 +151,7 @@ app.get("/me", async (req, res) => {
     }
 
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is missing");
+      console.error("JWT_SECRET is not configured");
 
       return res.status(500).json({
         message: "Authentication configuration error",
@@ -245,32 +252,17 @@ app.put("/api/profile", auth("client"), async (req, res) => {
   }
 });
 
-// Upload client profile image
+// Profile image upload.
+// Persistent storage must be configured before enabling this endpoint.
 app.post(
   "/api/profile/image",
   auth("client"),
   upload.single("image"),
   async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
-          message: "No image uploaded",
-        });
-      }
-
-      // Memory storage supplies a buffer, not a persistent file path.
-      // Upload req.file.buffer to persistent storage before saving the URL.
-      return res.status(501).json({
-        message:
-          "Profile image storage must be configured for deployment.",
-      });
-    } catch (error) {
-      console.error("Profile image error:", error.message);
-
-      return res.status(500).json({
-        message: "Could not upload profile image",
-      });
-    }
+    return res.status(501).json({
+      message:
+        "Profile image uploads require persistent cloud storage configuration.",
+    });
   }
 );
 
@@ -326,7 +318,7 @@ app.get("/shops/:id", async (req, res) => {
   }
 });
 
-// JSON 404 for unmatched backend routes
+// JSON response for unknown routes
 app.use((req, res) => {
   return res.status(404).json({
     message: "API route not found",
@@ -334,17 +326,29 @@ app.use((req, res) => {
   });
 });
 
+// Return JSON for unexpected route errors
+app.use((err, req, res, next) => {
+  console.error("Unhandled Express error:", err);
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  return res.status(500).json({
+    message: "Internal server error",
+  });
+});
+
 module.exports = app;
 
 // Local development only.
-// Vercel imports the exported Express app.
 if (require.main === module) {
   const port = process.env.PORT || 3000;
 
   connectDB()
     .then(() => {
       app.listen(port, () => {
-        console.log(`Server running on port ${port}`);
+        console.log(`Server running at http://localhost:${port}`);
       });
     })
     .catch((error) => {
