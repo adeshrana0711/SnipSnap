@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -7,12 +8,15 @@ import { apiFetch } from "../../api";
 const ClientLogin = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
+    if (loading) return;
     setLoading(true);
 
     try {
@@ -21,32 +25,47 @@ const ClientLogin = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
       });
 
-      const result = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      const result = contentType.includes("application/json")
+        ? await res.json()
+        : { message: await res.text() };
 
-      if (result.success) {
-        const nextUrl = new URLSearchParams(location.search).get("next") || "/";
-        Swal.fire({
-          icon: "success",
-          title: "Login Successful",
-          text: "Welcome back!",
-        }).then(() => {
-          navigate(nextUrl);
-        });
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Invalid Credentials",
-          text: result.message || "Email or password incorrect",
-        });
+      if (!res.ok || !result.success) {
+        throw new Error(
+          result.message || `Login failed (${res.status})`
+        );
       }
+
+      const requestedUrl =
+        new URLSearchParams(location.search).get("next") || "/";
+
+      // Only allow internal application paths.
+      const nextUrl =
+        requestedUrl.startsWith("/") &&
+        !requestedUrl.startsWith("//")
+          ? requestedUrl
+          : "/";
+
+      await Swal.fire({
+        icon: "success",
+        title: "Login Successful",
+        text: "Welcome back!",
+      });
+
+      navigate(nextUrl);
     } catch (err) {
-      Swal.fire({
+      console.error("Client login error:", err);
+
+      await Swal.fire({
         icon: "error",
-        title: "Server Error",
-        text: "Please try again later",
+        title: "Login Failed",
+        text: err.message || "Please try again later.",
       });
     } finally {
       setLoading(false);
@@ -56,19 +75,25 @@ const ClientLogin = () => {
   return (
     <div>
       <nav className="login-navbar">
-  <div className="login-navbar-inner">
-    <Link to="/" className="login-logo">SnipSnap</Link>
+        <div className="login-navbar-inner">
+          <Link to="/" className="login-logo">
+            SnipSnap
+          </Link>
 
-    <div className="login-nav-links">
-      <Link to="/" className="login-nav-link">Home</Link>
-      <Link to="/contact" className="login-nav-link">Contact</Link>
-    </div>
-  </div>
-</nav>
+          <div className="login-nav-links">
+            <Link to="/" className="login-nav-link">
+              Home
+            </Link>
+            <Link to="/contact" className="login-nav-link">
+              Contact
+            </Link>
+          </div>
+        </div>
+      </nav>
+
       <div className="main-container">
         <div className="welcome-container">
           <h1>Welcome Back!</h1>
-
           <p>Login to book appointments and manage your bookings.</p>
 
           <ul className="feature-list">
@@ -87,20 +112,17 @@ const ClientLogin = () => {
 
         <div className="login-container">
           <h2>Client Login</h2>
-
-          <p className="login-subtitle">Sign in to access your account</p>
+          <p className="login-subtitle">
+            Sign in to access your account
+          </p>
 
           <div className="social-container">
-            <a href="#" className="social facebook">
-              <i className="bx bxl-facebook"></i>
-            </a>
-
-            <a href="/auth/google" className="social google">
+            <a
+              href="/auth/google"
+              className="social google"
+              aria-label="Sign in with Google"
+            >
               <i className="bx bxl-google"></i>
-            </a>
-
-            <a href="#" className="social linkedin">
-              <i className="bx bxl-linkedin"></i>
             </a>
           </div>
 
@@ -110,13 +132,13 @@ const ClientLogin = () => {
             <div className="input-group">
               <div className="input-container">
                 <i className="bx bxs-envelope"></i>
-
                 <input
                   type="email"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -124,24 +146,28 @@ const ClientLogin = () => {
             <div className="input-group">
               <div className="input-container">
                 <i className="bx bxs-lock-alt"></i>
-
                 <input
                   type="password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
 
-            <button type="submit" className="submit-btn" disabled={loading}>
+            <button
+              type="submit"
+              className="submit-btn"
+              disabled={loading}
+            >
               {loading ? "Signing In..." : "Sign In"}
             </button>
           </form>
 
           <p className="signup-link">
-            Don't have an account?
+            Don't have an account?{" "}
             <Link to="/client/registration">Sign Up</Link>
           </p>
         </div>
