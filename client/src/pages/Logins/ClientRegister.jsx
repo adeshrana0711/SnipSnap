@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -6,6 +7,7 @@ import { apiFetch } from "../../api";
 
 const ClientRegister = () => {
   const navigate = useNavigate();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -13,13 +15,10 @@ const ClientRegister = () => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    const data = {
-      name: name,
-      email: email,
-      password: password,
-    };
+    if (loading) return;
+
+    setLoading(true);
 
     try {
       const res = await apiFetch("/client/registration", {
@@ -27,31 +26,42 @@ const ClientRegister = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+        }),
       });
 
-      const result = await res.json();
+      const contentType = res.headers.get("content-type") || "";
 
-      if (result.success) {
-        Swal.fire({
-          icon: "success",
-          title: "Registration Successful",
-          text: "Your account has been created!",
-        }).then(() => {
-          navigate("/client/login");
-        });
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Registration Failed",
-          text: result.message || "Something went wrong",
-        });
+      const result = contentType.includes("application/json")
+        ? await res.json()
+        : { message: await res.text() };
+
+      if (!res.ok || !result.success) {
+        throw new Error(
+          result.message ||
+            `Registration failed with status ${res.status}`
+        );
       }
+
+      await Swal.fire({
+        icon: "success",
+        title: "Registration Successful",
+        text: "Your account has been created!",
+      });
+
+      navigate("/client/login");
     } catch (err) {
-      Swal.fire({
+      console.error("Client registration error:", err);
+
+      await Swal.fire({
         icon: "error",
-        title: "Server Error",
-        text: "Please try again later",
+        title: "Registration Failed",
+        text:
+          err.message ||
+          "Unable to register right now. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -79,7 +89,10 @@ const ClientRegister = () => {
         <div className="welcome-container">
           <h1>Join SnipSnap Today</h1>
 
-          <p>Create your account to book appointments with top barbers instantly.</p>
+          <p>
+            Create your account to book appointments with top barbers
+            instantly.
+          </p>
 
           <ul className="feature-list">
             <li>
@@ -127,6 +140,7 @@ const ClientRegister = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  autoComplete="name"
                 />
               </div>
             </div>
@@ -140,6 +154,7 @@ const ClientRegister = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -153,18 +168,23 @@ const ClientRegister = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
+                  minLength={8}
                 />
               </div>
             </div>
 
-            <button type="submit" className="submit-btn" disabled={loading}>
+            <button
+              type="submit"
+              className="submit-btn"
+              disabled={loading}
+            >
               {loading ? "Creating Account..." : "Create Account"}
             </button>
           </form>
 
           <p className="login-link">
-            Already have an account?
-            <Link to="/client/login">Login</Link>
+            Already have an account? <Link to="/client/login">Login</Link>
           </p>
         </div>
       </div>
