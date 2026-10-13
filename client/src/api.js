@@ -1,12 +1,26 @@
-const API_URL = import.meta.env.VITE_API_URL;
-
 export async function apiFetch(path, options = {}) {
-  if (!API_URL) {
-    throw new Error("VITE_API_URL is not configured");
+  if (typeof path !== "string" || !path.trim()) {
+    throw new Error("API path must be a non-empty string");
   }
 
-  return fetch(`${API_URL}${path}`, {
+  const cleanPath = `/${path.trim().replace(/^\/+/, "")}`;
+
+  const response = await fetch(cleanPath, {
     ...options,
     credentials: "include",
   });
+
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const responseText = await response.text();
+
+    throw new Error(
+      `Unexpected server response (${response.status}): ${
+        responseText.slice(0, 150) || "Empty response"
+      }`
+    );
+  }
+
+  return response;
 }
