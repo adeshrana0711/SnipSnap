@@ -254,15 +254,77 @@ app.put("/api/profile", auth("client"), async (req, res) => {
 
 // Profile image upload.
 // Persistent storage must be configured before enabling this endpoint.
+
+const cloudinary = require("./config/cloudinary");
+
+// Replace the existing /api/profile/image route with this.
 app.post(
   "/api/profile/image",
   auth("client"),
   upload.single("image"),
   async (req, res) => {
-    return res.status(501).json({
-      message:
-        "Profile image uploads require persistent cloud storage configuration.",
-    });
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Please select an image.",
+        });
+      }
+
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+      ];
+
+      if (!allowedTypes.includes(req.file.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          message: "Only JPG, PNG and WEBP images are allowed.",
+        });
+      }
+
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "snipsnap/clients",
+            resource_type: "image",
+          },
+          (error, uploadedImage) => {
+            if (error) return reject(error);
+            resolve(uploadedImage);
+          }
+        );
+
+        stream.end(req.file.buffer);
+      });
+
+      const user = await Client.findByIdAndUpdate(
+        req.user.id,
+        { image: result.secure_url },
+        { new: true, runValidators: true }
+      );
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "Client not found.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Profile image updated.",
+        image: user.image,
+      });
+    } catch (error) {
+      console.error("Profile image upload failed:", error.message);
+
+      return res.status(500).json({
+        success: false,
+        message: "Could not upload profile image.",
+      });
+    }
   }
 );
 
