@@ -83,22 +83,60 @@ const Profile = () => {
     }
   };
 
+
   const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      showPopupMessage("Choose a JPG, PNG, or WEBP image.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showPopupMessage("Image must be smaller than 5 MB.");
+      e.target.value = "";
+      return;
+    }
+
     try {
       const formData = new FormData();
-      formData.append("image", e.target.files[0]);
+      formData.append("image", file);
 
-      await fetch("/api/profile/image", {
+      const res = await fetch("/api/profile/image", {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
 
-      showPopupMessage("Profile Image Updated");
-      loadProfile();
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.message || "Image upload failed");
+      }
+
+      if (data.image) {
+        setProfileImage(data.image);
+      }
+
+      await loadProfile();
+      showPopupMessage("Profile image updated successfully.");
     } catch (err) {
       console.error("Error uploading image:", err);
+      showPopupMessage(err.message || "Could not upload image.");
+    } finally {
+      e.target.value = "";
     }
   };
+
 
   return (
     <div>
@@ -135,8 +173,15 @@ const Profile = () => {
 
       <div className="profile-card">
         <div className="avatar-wrapper">
-          <img className="profile-image" src={profileImage} alt="Profile" />
-          <label className="upload-icon">
+          <img
+            className="profile-image"
+            src={profileImage || "/default-profile.png"}
+            alt="Profile"
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = "/default-profile.png";
+            }}
+          />          <label className="upload-icon">
             <i className="bx bx-camera"></i>
             <input type="file" onChange={handleImageUpload} />
           </label>

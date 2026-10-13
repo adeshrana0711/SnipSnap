@@ -1,26 +1,10 @@
-export async function apiFetch(path, options = {}) {
-  if (typeof path !== "string" || !path.trim()) {
-    throw new Error("API path must be a non-empty string");
-  }
+const app = require("../server/server");
 
-  const cleanPath = `/${path.trim().replace(/^\/+/, "")}`;
+module.exports = (req, res) => {
+  // Vercel routes API requests through /api.
+  // Remove that prefix before Express processes the request.
+  const originalUrl = req.url || "/";
+  req.url = originalUrl.replace(/^\/api(?=\/|$)/, "") || "/";
 
-  const response = await fetch(cleanPath, {
-    ...options,
-    credentials: "include",
-  });
-
-  const contentType = response.headers.get("content-type") || "";
-
-  if (!contentType.includes("application/json")) {
-    const responseText = await response.text();
-
-    throw new Error(
-      `Unexpected server response (${response.status}): ${
-        responseText.slice(0, 150) || "Empty response"
-      }`
-    );
-  }
-
-  return response;
-}
+  return app(req, res);
+};
