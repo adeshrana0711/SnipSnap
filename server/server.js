@@ -15,6 +15,7 @@ const Client = require("./models/Client");
 
 const auth = require("./middlewares/auth");
 const upload = require("./middlewares/upload");
+const cloudinary = require("./config/cloudinary");
 
 const barberRoutes = require("./routes/barberRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
@@ -31,7 +32,7 @@ const app = express();
 
 app.set("trust proxy", 1);
 
-// Validate router imports before app.use().
+// Validate route imports before registering them.
 const routesToCheck = {
   barberRoutes,
   appointmentRoutes,
@@ -94,26 +95,33 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Connect to MongoDB before any route that uses the database.
+// Health check: verifies the Express handler responds.
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "SnipSnap backend is running",
+  });
+});
+
+// Ensure MongoDB is connected before database-backed routes.
 app.use(async (req, res, next) => {
   try {
     await connectDB();
-    return next();
+    next();
   } catch (error) {
-    console.error("Database connection error:", error.message);
+    console.error("Database connection error:", error);
 
-    return res.status(503).json({
+    res.status(503).json({
       success: false,
       message: "Database unavailable",
     });
   }
 });
 
-// Existing uploads, if present.
-// Do not rely on Vercel's filesystem for persistent uploads.
+// Do not rely on local filesystem uploads for persistence on Vercel.
 app.use("/uploads", express.static("public/uploads"));
 
-// Routes
+// Main routes
 app.use("/api/barbers", barberRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
@@ -138,7 +146,7 @@ app.get("/logout", (req, res) => {
     path: "/",
   });
 
-  return res.json({ success: true });
+  res.json({ success: true });
 });
 
 // Login status
@@ -193,11 +201,11 @@ app.get("/client/stats", auth("client"), async (req, res) => {
       client: req.user.id,
     });
 
-    return res.json({ booking });
+    res.json({ booking });
   } catch (error) {
-    console.error("Client stats error:", error.message);
+    console.error("Client stats error:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       message: "Could not load client statistics",
     });
   }
@@ -214,11 +222,11 @@ app.get("/api/profile", auth("client"), async (req, res) => {
       });
     }
 
-    return res.json(user);
+    res.json(user);
   } catch (error) {
-    console.error("Get profile error:", error.message);
+    console.error("Get profile error:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       message: "Could not load profile",
     });
   }
@@ -242,22 +250,17 @@ app.put("/api/profile", auth("client"), async (req, res) => {
 
     await user.save();
 
-    return res.json(user);
+    res.json(user);
   } catch (error) {
-    console.error("Update profile error:", error.message);
+    console.error("Update profile error:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       message: "Could not update profile",
     });
   }
 });
 
-// Profile image upload.
-// Persistent storage must be configured before enabling this endpoint.
-
-const cloudinary = require("./config/cloudinary");
-
-// Replace the existing /api/profile/image route with this.
+// Upload client profile image to Cloudinary
 app.post(
   "/api/profile/image",
   auth("client"),
@@ -312,15 +315,15 @@ app.post(
         });
       }
 
-      return res.json({
+      res.json({
         success: true,
         message: "Profile image updated.",
         image: user.image,
       });
     } catch (error) {
-      console.error("Profile image upload failed:", error.message);
+      console.error("Profile image upload failed:", error);
 
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: "Could not upload profile image.",
       });
@@ -329,35 +332,39 @@ app.post(
 );
 
 // Update barber availability
-app.patch("/availability/:id", auth("shop"), async (req, res) => {
-  try {
-    const { start, end } = req.body;
+app.patch(
+  "/availability/:id",
+  auth("shop"),
+  async (req, res) => {
+    try {
+      const { start, end } = req.body;
 
-    const barber = await Barber.findOne({
-      _id: req.params.id,
-      shop: req.user.id,
-    });
+      const barber = await Barber.findOne({
+        _id: req.params.id,
+        shop: req.user.id,
+      });
 
-    if (!barber) {
-      return res.status(404).json({
-        message: "Barber not found",
+      if (!barber) {
+        return res.status(404).json({
+          message: "Barber not found",
+        });
+      }
+
+      barber.workingHours.start = start;
+      barber.workingHours.end = end;
+
+      await barber.save();
+
+      res.json(barber);
+    } catch (error) {
+      console.error("Availability update error:", error);
+
+      res.status(500).json({
+        message: "Could not update availability",
       });
     }
-
-    barber.workingHours.start = start;
-    barber.workingHours.end = end;
-
-    await barber.save();
-
-    return res.json(barber);
-  } catch (error) {
-    console.error("Availability update error:", error.message);
-
-    return res.status(500).json({
-      message: "Could not update availability",
-    });
   }
-});
+);
 
 // Get shop by ID
 app.get("/shops/:id", async (req, res) => {
@@ -370,25 +377,25 @@ app.get("/shops/:id", async (req, res) => {
       });
     }
 
-    return res.json(shop);
+    res.json(shop);
   } catch (error) {
-    console.error("Get shop error:", error.message);
+    console.error("Get shop error:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       message: "Could not load shop",
     });
   }
 });
 
-// JSON response for unknown routes
+// Unknown routes
 app.use((req, res) => {
-  return res.status(404).json({
+  res.status(404).json({
     message: "API route not found",
     path: req.originalUrl,
   });
 });
 
-// Return JSON for unexpected route errors
+// Central error handler
 app.use((err, req, res, next) => {
   console.error("Unhandled Express error:", err);
 
@@ -396,14 +403,15 @@ app.use((err, req, res, next) => {
     return next(err);
   }
 
-  return res.status(500).json({
+  res.status(500).json({
     message: "Internal server error",
   });
 });
 
+// Export app for Vercel
 module.exports = app;
 
-// Local development only.
+// Start a persistent server only during local development.
 if (require.main === module) {
   const port = process.env.PORT || 3000;
 
