@@ -1,4 +1,4 @@
-const app = require("../server/server");
+const app = require("../server/server.js");
 
 module.exports = (req, res) => {
   // Vercel routes API requests through /api.
