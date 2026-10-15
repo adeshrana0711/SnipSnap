@@ -1,15 +1,14 @@
+
 {
-  "name": "server",
+  "name": "snipsnap-server",
   "version": "1.0.0",
+  "private": true,
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "node -e \"console.log('Backend ready for deployment')\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
