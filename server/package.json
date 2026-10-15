@@ -1,13 +1,16 @@
+
 {
-  "name": "snipsnap-server",
+  "name": "server",
   "version": "1.0.0",
-  "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "build": "node -e \"console.log('Backend ready for deployment')\""
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
   "dependencies": {
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
@@ -18,7 +21,6 @@
     "nodemailer": "^9.0.2",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "razorpay": "^2.9.6",
-    "snipsnap": "file:.."
+    "razorpay": "^2.9.6"
   }
 }
