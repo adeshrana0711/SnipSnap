@@ -122,11 +122,26 @@ app.use(async (req, res, next) => {
 app.use("/uploads", express.static("public/uploads"));
 
 // Main routes
+
+ // Main routes
 app.use("/api/barbers", barberRoutes);
+
+// Shop routes: support both API and legacy paths
+app.use("/api/shop", shopRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
 
 app.use("/shop", shopRoutes);
+
+app.use("/client", clientLoginRoute);
+app.use("/client", clientRegisterRoute);
+
+app.use("/appointment", appointmentRoutes);
+app.use("/client/bookings", clientBookingsRoute);
+
+app.use("/api", slotRoutes);
+app.use("/auth", googleAuthRoutes);
+
 
 app.use("/client", clientLoginRoute);
 app.use("/client", clientRegisterRoute);
