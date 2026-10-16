@@ -40,7 +40,7 @@ const Home = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const loadShops = async (url = "/shop/shops") => {
+  const loadShops = async (url = "/api/shop/shops") => {
     setLoading(true);
     setError("");
     try {
@@ -59,7 +59,7 @@ const Home = () => {
     let active = true;
     const checkUser = async () => {
       try {
-        const response = await fetch(apiUrl("/me"), { credentials: "include" });
+        const response = await fetch(apiUrl("/api/me"), { credentials: "include" });
         const data = await readApiResponse(response);
         if (active && data.loggedIn && data.role === "client") {
           setIsLoggedIn(true);
@@ -160,7 +160,7 @@ const Home = () => {
         setLocationMessage(`Could not find "${city}". Try a city and state, e.g. Kalka, Haryana.`);
         return;
       }
-      const response = await fetch(apiUrl("/shop/shops"), { credentials: "include" });
+      const response = await fetch(apiUrl("/api/shop/shops"), { credentials: "include" });
       const data = await readApiResponse(response);
       const allShops = Array.isArray(data) ? data : [];
       const withinRadius = allShops
@@ -205,7 +205,7 @@ const Home = () => {
         localStorage.setItem("snipsnap-location-coordinates", JSON.stringify({ lat, lng }));
         localStorage.removeItem("snipsnap-city-search");
       }
-      const allResponse = await fetch(apiUrl("/shop/shops"), { credentials: "include" });
+      const allResponse = await fetch(apiUrl("/api/shop/shops"), { credentials: "include" });
       const allShops = await readApiResponse(allResponse);
       const allList = Array.isArray(allShops) ? allShops : [];
       const within20Km = allList
@@ -291,7 +291,7 @@ const Home = () => {
     setPlaceName("");
     setLocationMessage("");
     setNearbyFallback(false);
-    loadShops("/shop/shops");
+    loadShops("/api/shop/shops");
   };
   return (
     <div className="home-page">

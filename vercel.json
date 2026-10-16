@@ -2,55 +2,51 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
+  "outputDirectory": "client/dist",
   "rewrites": [
     {
-      "source": "/shop/shops",
-      "destination": "/api/legacy/shop/shops"
-    },
-    {
       "source": "/me",
-      "destination": "/api/legacy/me"
+      "destination": "/api/me"
     },
     {
       "source": "/logout",
-      "destination": "/api/legacy/logout"
+      "destination": "/api/logout"
     },
     {
-      "source": "/shop/:path*",
-      "destination": "/api/legacy/shop/:path*"
+      "source": "/shop/profile",
+      "destination": "/api/shop/profile"
     },
     {
       "source": "/client/bookings",
-      "destination": "/api/legacy/client/bookings"
+      "destination": "/api/client/bookings"
     },
     {
       "source": "/client/stats",
-      "destination": "/api/legacy/client/stats"
+      "destination": "/api/client/stats"
     },
     {
       "source": "/appointment/:path*",
-      "destination": "/api/legacy/appointment/:path*"
+      "destination": "/api/appointment/:path*"
     },
     {
       "source": "/auth/:path*",
-      "destination": "/api/legacy/auth/:path*"
+      "destination": "/api/auth/:path*"
     },
     {
       "source": "/availability/:path*",
-      "destination": "/api/legacy/availability/:path*"
+      "destination": "/api/availability/:path*"
     },
     {
       "source": "/shops/:path*",
-      "destination": "/api/legacy/shops/:path*"
+      "destination": "/api/shops/:path*"
     },
     {
       "source": "/uploads/:path*",
-      "destination": "/api/legacy/uploads/:path*"
+      "destination": "/api/uploads/:path*"
     },
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-    
   ]
 }

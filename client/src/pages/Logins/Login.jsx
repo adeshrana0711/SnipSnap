@@ -15,7 +15,7 @@ const Login = ({ role: initialRole }) => {
     (location.pathname.includes("/client") ? "client" : "barber");
   const isClient = role === "client";
 
-  const authUrl = isClient ? "/client/login" : "/api/shop/login";
+  const authUrl = isClient ? "/api/client/login" : "/api/shop/login";
   const signUpUrl = isClient ? "/client/registration" : "/barber/registration";
   const defaultRedirect = isClient ? "/" : "/shop/dashboard";
   const nextUrl = new URLSearchParams(location.search).get("next") || defaultRedirect;
