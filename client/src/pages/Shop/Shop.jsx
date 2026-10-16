@@ -17,7 +17,7 @@ const Shop = () => {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        const res = await fetch("/me", {
+        const res = await fetch("/api/me", {
           credentials: "include",
         });
 
@@ -45,10 +45,9 @@ const Shop = () => {
       try {
         setLoading(true);
 
-        const res = await fetch(`/shop/${shopId}/data`, {
+        const res = await fetch(`/api/shop/${shopId}/data`, {
           credentials: "include",
         });
-
         if (!res.ok) {
           throw new Error("Unable to load shop");
         }
