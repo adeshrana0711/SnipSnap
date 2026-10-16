@@ -24,8 +24,13 @@ const readApiResponse = async (response) => {
   }
   return data;
 };
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-const apiUrl = (path) => `${API_BASE_URL}${path}`;
+// Use the same-origin Vercel API. Pass Express route paths without a leading /api
+// (for example "/shop/shops" and "/me") to avoid accidentally creating "/api/api/...".
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
+const apiUrl = (path) => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+};
 const Home = () => {
   const navigate = useNavigate();
   const [shops, setShops] = useState([]);
@@ -59,7 +64,7 @@ const Home = () => {
     let active = true;
     const checkUser = async () => {
       try {
-        const response = await fetch(apiUrl("/api/me"), { credentials: "include" });
+        const response = await fetch(apiUrl("/me"), { credentials: "include" });
         const data = await readApiResponse(response);
         if (active && data.loggedIn && data.role === "client") {
           setIsLoggedIn(true);
@@ -160,7 +165,7 @@ const Home = () => {
         setLocationMessage(`Could not find "${city}". Try a city and state, e.g. Kalka, Haryana.`);
         return;
       }
-      const response = await fetch(apiUrl("/api/shop/shops"), { credentials: "include" });
+      const response = await fetch(apiUrl("/shop/shops"), { credentials: "include" });
       const data = await readApiResponse(response);
       const allShops = Array.isArray(data) ? data : [];
       const withinRadius = allShops
@@ -205,7 +210,7 @@ const Home = () => {
         localStorage.setItem("snipsnap-location-coordinates", JSON.stringify({ lat, lng }));
         localStorage.removeItem("snipsnap-city-search");
       }
-      const allResponse = await fetch(apiUrl("/api/shop/shops"), { credentials: "include" });
+      const allResponse = await fetch(apiUrl("/shop/shops"), { credentials: "include" });
       const allShops = await readApiResponse(allResponse);
       const allList = Array.isArray(allShops) ? allShops : [];
       const within20Km = allList
@@ -291,7 +296,7 @@ const Home = () => {
     setPlaceName("");
     setLocationMessage("");
     setNearbyFallback(false);
-    loadShops("/api/shop/shops");
+    loadShops("/shop/shops");
   };
   return (
     <div className="home-page">
