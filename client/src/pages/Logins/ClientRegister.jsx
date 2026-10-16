@@ -21,47 +21,41 @@ const ClientRegister = () => {
     setLoading(true);
 
     try {
-      const res = await apiFetch("/client/registration", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim().toLowerCase(),
-          password,
-        }),
+      const response = await api.post("/client/registration", {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
       });
 
-      const contentType = res.headers.get("content-type") || "";
+      const result = response.data;
 
-      const result = contentType.includes("application/json")
-        ? await res.json()
-        : { message: await res.text() };
-
-      if (!res.ok || !result.success) {
-        throw new Error(
-          result.message ||
-            `Registration failed with status ${res.status}`
-        );
+      if (result?.success === false) {
+        throw new Error(result.message || "Registration failed.");
       }
 
       await Swal.fire({
         icon: "success",
         title: "Registration Successful",
-        text: "Your account has been created!",
+        text: result?.message || "Your account has been created!",
       });
 
       navigate("/client/login");
     } catch (err) {
-      console.error("Client registration error:", err);
+      console.error(
+        "Client registration error:",
+        err.response?.data || err.message || err
+      );
+
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Unable to register right now. Please try again.";
 
       await Swal.fire({
         icon: "error",
         title: "Registration Failed",
-        text:
-          err.message ||
-          "Unable to register right now. Please try again.",
+        text: message,
       });
     } finally {
       setLoading(false);
@@ -76,12 +70,8 @@ const ClientRegister = () => {
         </div>
 
         <ul className="links">
-          <li>
-            <Link to="/">Home</Link>
-          </li>
-          <li>
-            <Link to="#">Contact</Link>
-          </li>
+          <li><Link to="/">Home</Link></li>
+          <li><Link to="#">Contact</Link></li>
         </ul>
       </nav>
 
@@ -95,18 +85,10 @@ const ClientRegister = () => {
           </p>
 
           <ul className="feature-list">
-            <li>
-              <i className="bx bxs-check-circle"></i> Book barbers instantly
-            </li>
-            <li>
-              <i className="bx bxs-check-circle"></i> Track appointment history
-            </li>
-            <li>
-              <i className="bx bxs-check-circle"></i> Secure wallet payments
-            </li>
-            <li>
-              <i className="bx bxs-check-circle"></i> Exclusive member offers
-            </li>
+            <li><i className="bx bxs-check-circle"></i> Book barbers instantly</li>
+            <li><i className="bx bxs-check-circle"></i> Track appointment history</li>
+            <li><i className="bx bxs-check-circle"></i> Secure wallet payments</li>
+            <li><i className="bx bxs-check-circle"></i> Exclusive member offers</li>
           </ul>
         </div>
 
@@ -118,11 +100,9 @@ const ClientRegister = () => {
             <a href="/auth/google" className="social google">
               <i className="bx bxl-google"></i>
             </a>
-
             <a href="/auth/facebook" className="social facebook">
               <i className="bx bxl-facebook"></i>
             </a>
-
             <a href="/auth/twitter" className="social twitter">
               <i className="bx bxl-twitter"></i>
             </a>
