@@ -133,6 +133,7 @@ app.use("/api/shop", shopRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
 app.use("/shop", shopRoutes);
+app.use("/api/shop", shopRoutes);
 
 app.use("/client", clientLoginRoute);
 app.use("/client", clientRegisterRoute);
