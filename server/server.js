@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -32,7 +31,7 @@ const app = express();
 
 app.set("trust proxy", 1);
 
-// Validate route imports before registering them.
+// Validate Express router imports.
 const routesToCheck = {
   barberRoutes,
   appointmentRoutes,
@@ -95,7 +94,7 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check: verifies the Express handler responds.
+// Health check: does not require MongoDB.
 app.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
@@ -103,8 +102,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Ensure MongoDB is connected before database-backed routes.
+// Connect to MongoDB for database-backed requests.
 app.use(async (req, res, next) => {
+  if (req.path === "/health") {
+    return next();
+  }
+
   try {
     await connectDB();
     next();
@@ -118,30 +121,18 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Do not rely on local filesystem uploads for persistence on Vercel.
+// Static uploads are not persistent on Vercel.
+// Use Cloudinary for production uploads.
 app.use("/uploads", express.static("public/uploads"));
 
 // Main routes
-
- // Main routes
 app.use("/api/barbers", barberRoutes);
 
-// Shop routes: support both API and legacy paths
+// Support both /api/shop/... and /shop/... paths.
 app.use("/api/shop", shopRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
-
 app.use("/shop", shopRoutes);
-
-app.use("/client", clientLoginRoute);
-app.use("/client", clientRegisterRoute);
-
-app.use("/appointment", appointmentRoutes);
-app.use("/client/bookings", clientBookingsRoute);
-
-app.use("/api", slotRoutes);
-app.use("/auth", googleAuthRoutes);
-
 
 app.use("/client", clientLoginRoute);
 app.use("/client", clientRegisterRoute);
@@ -423,7 +414,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Export app for Vercel
+// Export app for Vercel.
 module.exports = app;
 
 // Start a persistent server only during local development.
