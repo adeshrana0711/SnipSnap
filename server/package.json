@@ -1,16 +1,10 @@
-
 {
-  "name": "server",
+  "name": "snipsnap",
   "version": "1.0.0",
-  "main": "server.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "build": "npm --prefix client install && npm --prefix client run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
