@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import "../../styles/regisClient.css";
-import { apiFetch } from "../../api";
+import api from "../../api";
 
 const ClientRegister = () => {
   const navigate = useNavigate();

@@ -1,10 +1,9 @@
-const app = require("../server/server");
 
-module.exports = (req, res) => {
-  // Vercel routes API requests through /api.
-  // Remove that prefix before Express processes the request.
-  const originalUrl = req.url || "/";
-  req.url = originalUrl.replace(/^\/api(?=\/|$)/, "") || "/";
+import axios from "axios";
 
-  return app(req, res);
-};
+const api = axios.create({
+  baseURL: "/api",
+  withCredentials: true,
+});
+
+export default api;
