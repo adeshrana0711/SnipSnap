@@ -6,6 +6,7 @@
     "build": "npm --prefix client ci && npm --prefix client run build"
   },
   "dependencies": {
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
