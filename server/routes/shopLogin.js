@@ -27,7 +27,7 @@ router.post('/login', async (req, res) => {
         return res.json({ success: true });
     }catch(error){
         console.error("Shop login error:", error);
-        return res.status(500).json({ success: false, message: "Server Error" });
+        return res.status(500).json({ success: false, message: "Error" });
     }
 });
 
