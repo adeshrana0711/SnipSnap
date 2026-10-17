@@ -94,6 +94,17 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+
+formData.append("name", name);
+formData.append("owner_name", ownerName);
+formData.append("email", email);
+formData.append("phone", phone);
+formData.append("password", password);
+formData.append("location", location);
+formData.append("city", city);
+formData.append("latitude", String(latitude));
+formData.append("longitude", String(longitude));
+
     if (formData.latitude === "" || formData.longitude === "") {
       Swal.fire(
         "Location Required",
