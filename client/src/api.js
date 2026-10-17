@@ -1,15 +1,14 @@
 
-import axios from "axios";
+const app = require("../server/server.js");
 
-export const apiFetch = (path, options = {}) =>
-  fetch(`/api${path.startsWith("/") ? path : `/${path}`}`, {
-    credentials: "include",
-    ...options,
-  });
+module.exports = (req, res) => {
+  const originalUrl = req.url || "/";
+  const pathname = originalUrl.split("?")[0];
 
-const api = axios.create({
-  baseURL: "/api",
-  withCredentials: true,
-});
+  // Convert /api/client/login to /client/login
+  if (/^\/api(?:\/|$)/.test(pathname)) {
+    req.url = originalUrl.replace(/^\/api(?=\/|$)/, "") || "/";
+  }
 
-export default api;
+  return app(req, res);
+};
