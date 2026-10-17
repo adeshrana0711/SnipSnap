@@ -1,14 +1,20 @@
 
-const app = require("../server/server.js");
+import axios from "axios";
 
-module.exports = (req, res) => {
-  const originalUrl = req.url || "/";
-  const pathname = originalUrl.split("?")[0];
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "/api",
+  withCredentials: true,
+});
 
-  // Convert /api/client/login to /client/login
-  if (/^\/api(?:\/|$)/.test(pathname)) {
-    req.url = originalUrl.replace(/^\/api(?=\/|$)/, "") || "/";
-  }
+export const apiFetch = (path, options = {}) =>
+  fetch(
+    `${import.meta.env.VITE_API_URL || "/api"}${
+      path.startsWith("/") ? path : `/${path}`
+    }`,
+    {
+      credentials: "include",
+      ...options,
+    }
+  );
 
-  return app(req, res);
-};
+export default api;
