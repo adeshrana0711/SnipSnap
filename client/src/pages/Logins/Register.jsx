@@ -38,8 +38,6 @@ const Register = () => {
     }));
   };
 
-  // Get the shop's current geographical coordinates.
-  // Use this while physically at the shop, not at home.
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       Swal.fire(
@@ -94,19 +92,38 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (loading) return;
 
-formData.append("name", name);
-formData.append("owner_name", ownerName);
-formData.append("email", email);
-formData.append("phone", phone);
-formData.append("password", password);
-formData.append("location", location);
-formData.append("city", city);
-formData.append("latitude", String(latitude));
-formData.append("longitude", String(longitude));
+    const {
+      name,
+      owner_name,
+      email,
+      phone,
+      password,
+      location,
+      city,
+      latitude,
+      longitude,
+      shopImage,
+    } = formData;
 
-    if (formData.latitude === "" || formData.longitude === "") {
-      Swal.fire(
+    if (
+      !name.trim() ||
+      !email.trim() ||
+      !password ||
+      !location.trim() ||
+      !city.trim()
+    ) {
+      await Swal.fire(
+        "Missing Details",
+        "Please fill in all required shop details.",
+        "warning"
+      );
+      return;
+    }
+
+    if (latitude === "" || longitude === "") {
+      await Swal.fire(
         "Location Required",
         "Please capture the shop's coordinates before registering.",
         "warning"
@@ -114,52 +131,66 @@ formData.append("longitude", String(longitude));
       return;
     }
 
-    setLoading(true);
-
-    const data = new FormData();
-
-    data.append("name", formData.name.trim());
-    data.append("owner_name", formData.owner_name.trim());
-    data.append("email", formData.email.trim());
-    data.append("phone", formData.phone.trim());
-    data.append("password", formData.password);
-    data.append("location", formData.location.trim());
-    data.append("city", formData.city.trim());
-    data.append("latitude", formData.latitude);
-    data.append("longitude", formData.longitude);
-
-    if (formData.shopImage) {
-      data.append("shopImage", formData.shopImage);
+    if (!shopImage) {
+      await Swal.fire(
+        "Photo Required",
+        "Please select a shop photo.",
+        "warning"
+      );
+      return;
     }
 
+    setLoading(true);
+
     try {
+      // Create a real multipart FormData object.
+      const data = new FormData();
+
+      data.append("name", name.trim());
+      data.append("owner_name", owner_name.trim());
+      data.append("email", email.trim().toLowerCase());
+      data.append("phone", phone.trim());
+      data.append("password", password);
+      data.append("location", location.trim());
+      data.append("city", city.trim());
+      data.append("latitude", String(latitude));
+      data.append("longitude", String(longitude));
+      data.append("shopImage", shopImage);
+
       const response = await fetch("/api/shop/registration", {
         method: "POST",
-        body: formData,
         credentials: "include",
-      });;
+        body: data,
+      });
 
-      const result = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+
+      const result = contentType.includes("application/json")
+        ? await response.json()
+        : {
+            success: false,
+            message: await response.text(),
+          };
 
       if (!response.ok || !result.success) {
         throw new Error(
-          result.message || "Shop registration failed."
+          result.message || `Registration failed (${response.status})`
         );
       }
 
       await Swal.fire(
         "Success",
-        "Shop Registered Successfully",
+        result.message || "Shop registered successfully.",
         "success"
       );
 
       navigate("/barber/login");
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("Shop registration error:", error);
 
-      Swal.fire(
+      await Swal.fire(
         "Registration Failed",
-        error.message || "Please check your server and try again.",
+        error.message || "Please check your connection and try again.",
         "error"
       );
     } finally {
@@ -170,14 +201,16 @@ formData.append("longitude", String(longitude));
   return (
     <div>
       <nav>
-        <div className="logo">SnipSnap</div>
+        <div className="logo" onClick={() => navigate("/")}>
+          SnipSnap
+        </div>
 
         <ul className="links">
           <li>
             <Link to="/">Home</Link>
           </li>
           <li>
-            <Link to="#">Contact</Link>
+            <Link to="/contact">Contact</Link>
           </li>
         </ul>
       </nav>
@@ -193,8 +226,9 @@ formData.append("longitude", String(longitude));
 
           <form onSubmit={handleSubmit}>
             <div className="input-group">
-              <label>Shop Name</label>
+              <label htmlFor="name">Shop Name</label>
               <input
+                id="name"
                 type="text"
                 name="name"
                 value={formData.name}
@@ -204,8 +238,9 @@ formData.append("longitude", String(longitude));
             </div>
 
             <div className="input-group">
-              <label>Owner Name</label>
+              <label htmlFor="owner_name">Owner Name</label>
               <input
+                id="owner_name"
                 type="text"
                 name="owner_name"
                 value={formData.owner_name}
@@ -215,19 +250,22 @@ formData.append("longitude", String(longitude));
             </div>
 
             <div className="input-group">
-              <label>Email</label>
+              <label htmlFor="email">Email</label>
               <input
+                id="email"
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
+                autoComplete="email"
                 required
               />
             </div>
 
             <div className="input-group">
-              <label>Phone</label>
+              <label htmlFor="phone">Phone</label>
               <input
+                id="phone"
                 type="tel"
                 name="phone"
                 value={formData.phone}
@@ -237,20 +275,23 @@ formData.append("longitude", String(longitude));
             </div>
 
             <div className="input-group">
-              <label>Password</label>
+              <label htmlFor="password">Password</label>
               <input
+                id="password"
                 type="password"
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                required
+                autoComplete="new-password"
                 minLength={8}
+                required
               />
             </div>
 
             <div className="input-group">
-              <label>Full Shop Address</label>
+              <label htmlFor="location">Full Shop Address</label>
               <input
+                id="location"
                 type="text"
                 name="location"
                 value={formData.location}
@@ -261,8 +302,9 @@ formData.append("longitude", String(longitude));
             </div>
 
             <div className="input-group">
-              <label>City</label>
+              <label htmlFor="city">City</label>
               <input
+                id="city"
                 type="text"
                 name="city"
                 value={formData.city}
@@ -278,7 +320,7 @@ formData.append("longitude", String(longitude));
               <button
                 type="button"
                 onClick={handleGetLocation}
-                disabled={gettingLocation}
+                disabled={gettingLocation || loading}
                 className="submit-btn"
               >
                 {gettingLocation
@@ -295,11 +337,12 @@ formData.append("longitude", String(longitude));
             </div>
 
             <div className="input-group">
-              <label>Shop Photo</label>
+              <label htmlFor="shopImage">Shop Photo</label>
               <input
+                id="shopImage"
                 type="file"
                 name="shopImage"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={handleFileChange}
                 required
               />
