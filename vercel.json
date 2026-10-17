@@ -1,47 +1,52 @@
+
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "/api/api.js"
+    },
+    {
       "source": "/me",
-      "destination": "/api/me"
+      "destination": "/api/api.js"
     },
     {
       "source": "/logout",
-      "destination": "/api/logout"
+      "destination": "/api/api.js"
     },
     {
-      "source": "/shop/profile",
-      "destination": "/api/shop/profile"
+      "source": "/shop/:path*",
+      "destination": "/api/api.js"
     },
     {
-      "source": "/client/bookings",
-      "destination": "/api/client/bookings"
-    },
-    {
-      "source": "/client/stats",
-      "destination": "/api/client/stats"
+      "source": "/client/:path*",
+      "destination": "/api/api.js"
     },
     {
       "source": "/appointment/:path*",
-      "destination": "/api/appointment/:path*"
+      "destination": "/api/api.js"
     },
     {
       "source": "/auth/:path*",
-      "destination": "/api/auth/:path*"
+      "destination": "/api/api.js"
     },
     {
       "source": "/availability/:path*",
-      "destination": "/api/availability/:path*"
+      "destination": "/api/api.js"
     },
     {
       "source": "/shops/:path*",
-      "destination": "/api/shops/:path*"
+      "destination": "/api/api.js"
     },
     {
       "source": "/uploads/:path*",
-      "destination": "/api/uploads/:path*"
+      "destination": "/api/api.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
