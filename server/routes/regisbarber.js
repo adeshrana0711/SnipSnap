@@ -1,12 +1,16 @@
+
 const express = require("express");
 const router = express.Router();
-const Shop = require("../models/Shop");
 const multer = require("multer");
+const Shop = require("../models/Shop");
 const cloudinary = require("../config/cloudinary");
 
+// Accept shop photos in memory for upload to Cloudinary.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       "image/jpeg",
@@ -16,7 +20,7 @@ const upload = multer({
 
     if (!allowedTypes.includes(file.mimetype)) {
       return cb(
-        new Error("Only JPG, PNG and WEBP images are allowed")
+        new Error("Only JPG, PNG and WEBP images are allowed.")
       );
     }
 
@@ -24,6 +28,7 @@ const upload = multer({
   },
 });
 
+// Upload a buffer to Cloudinary.
 function uploadToCloudinary(buffer) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -33,6 +38,13 @@ function uploadToCloudinary(buffer) {
       },
       (error, result) => {
         if (error) return reject(error);
+
+        if (!result || !result.secure_url) {
+          return reject(
+            new Error("Cloudinary did not return an image URL.")
+          );
+        }
+
         resolve(result);
       }
     );
@@ -41,9 +53,33 @@ function uploadToCloudinary(buffer) {
   });
 }
 
+// POST /api/shop/registration
 router.post(
   "/registration",
-  upload.single("shopImage"),
+  (req, res, next) => {
+    upload.single("shopImage")(req, res, (err) => {
+      if (!err) return next();
+
+      console.error("Shop image upload validation failed:", err);
+
+      if (err instanceof multer.MulterError) {
+        const message =
+          err.code === "LIMIT_FILE_SIZE"
+            ? "Shop photo must be 5 MB or smaller."
+            : "Shop photo upload failed.";
+
+        return res.status(400).json({
+          success: false,
+          message,
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: err.message || "Invalid shop photo.",
+      });
+    });
+  },
   async (req, res) => {
     try {
       const {
@@ -56,16 +92,19 @@ router.post(
         city,
         latitude,
         longitude,
-      } = req.body;
+      } = req.body || {};
 
+      // Validate required fields.
       if (
-        !name ||
-        !email ||
+        !name?.trim() ||
+        !email?.trim() ||
         !password ||
-        !location ||
-        !city ||
+        !location?.trim() ||
+        !city?.trim() ||
         latitude === undefined ||
-        longitude === undefined
+        latitude === "" ||
+        longitude === undefined ||
+        longitude === ""
       ) {
         return res.status(400).json({
           success: false,
@@ -93,6 +132,7 @@ router.post(
 
       const normalizedEmail = email.trim().toLowerCase();
 
+      // Check whether this email is already registered.
       const existingShop = await Shop.findOne({
         email: normalizedEmail,
       });
@@ -100,10 +140,11 @@ router.post(
       if (existingShop) {
         return res.status(409).json({
           success: false,
-          message: "Shop already registered with this email",
+          message: "Shop already registered with this email.",
         });
       }
 
+      // Upload the selected photo to Cloudinary.
       let imagePath = "";
 
       if (req.file) {
@@ -111,11 +152,12 @@ router.post(
         imagePath = result.secure_url;
       }
 
+      // Save the shop.
       const newShop = new Shop({
         name: name.trim(),
-        owner_name,
+        owner_name: owner_name?.trim() || "",
         email: normalizedEmail,
-        phone,
+        phone: phone?.trim() || "",
         password,
         location: location.trim(),
         city: city.trim(),
@@ -130,16 +172,39 @@ router.post(
 
       return res.status(201).json({
         success: true,
-        message: "Shop registered successfully",
+        message: "Shop registered successfully.",
         shopId: newShop._id,
         image: newShop.image,
       });
     } catch (err) {
-      console.error("Shop registration error:", err.message);
+      // Log the actual cause in server/Vercel logs.
+      console.error("Shop registration failed:", {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        stack: err.stack,
+      });
+
+      if (err.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: "A shop with this email already exists.",
+        });
+      }
+
+      if (err.name === "ValidationError") {
+        return res.status(400).json({
+          success: false,
+          message: "Shop details failed database validation.",
+          details: Object.values(err.errors || {}).map(
+            (item) => item.message
+          ),
+        });
+      }
 
       return res.status(500).json({
         success: false,
-        message: "Server error during shop registration",
+        message: "Server error during shop registration.",
       });
     }
   }
