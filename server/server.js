@@ -157,50 +157,35 @@ app.get("/logout", (req, res) => {
 });
 
 // Login status
-app.get("/me", async (req, res) => {
+app.get("/me", (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+
   try {
-    const token = req.cookies.token;
+    const token = req.cookies?.token;
 
     if (!token) {
-      return res.json({ loggedIn: false });
-    }
-
-    if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is not configured");
-
-      return res.status(500).json({
-        message: "Authentication configuration error",
+      return res.status(200).json({
+        loggedIn: false,
+        role: null,
       });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    let user = null;
-
-    if (decoded.role === "client") {
-      user = await Client.findById(decoded.id);
-    } else if (decoded.role === "shop") {
-      user = await Shop.findById(decoded.id);
-    }
-
-    if (!user) {
-      return res.json({ loggedIn: false });
-    }
-
-    return res.json({
+    return res.status(200).json({
       loggedIn: true,
       role: decoded.role,
-      name: user.name,
-      email: user.email,
-      wallet: user.wallet || 0,
-      image: user.image || null,
+      id: decoded.id,
     });
   } catch (error) {
-    console.error("Login status error:", error.message);
-    return res.json({ loggedIn: false });
+    return res.status(200).json({
+      loggedIn: false,
+      role: null,
+    });
   }
 });
-
 // Client statistics
 app.get("/client/stats", auth("client"), async (req, res) => {
   try {
