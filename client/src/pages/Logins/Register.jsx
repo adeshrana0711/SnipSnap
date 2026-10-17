@@ -124,8 +124,9 @@ const Register = () => {
     try {
       const response = await fetch("/api/shop/registration", {
         method: "POST",
-        body: data,
-      });
+        body: formData,
+        credentials: "include",
+      });;
 
       const result = await response.json();
 

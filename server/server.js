@@ -129,11 +129,16 @@ app.use("/uploads", express.static("public/uploads"));
 app.use("/api/barbers", barberRoutes);
 
 // Support both /api/shop/... and /shop/... paths.
+
 app.use("/api/shop", shopRoutes);
 app.use("/api/shop", barberLoginRoute);
 app.use("/api/shop", barberRegisterRoute);
+
+// Support requests forwarded without the /api prefix.
 app.use("/shop", shopRoutes);
-app.use("/api/shop", shopRoutes);
+app.use("/shop", barberLoginRoute);
+app.use("/shop", barberRegisterRoute);
+
 
 app.use("/client", clientLoginRoute);
 app.use("/client", clientRegisterRoute);
@@ -186,6 +191,7 @@ app.get("/me", (req, res) => {
     });
   }
 });
+
 // Client statistics
 app.get("/client/stats", auth("client"), async (req, res) => {
   try {
