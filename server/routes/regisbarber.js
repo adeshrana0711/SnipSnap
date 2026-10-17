@@ -5,7 +5,7 @@ const multer = require("multer");
 const Shop = require("../models/Shop");
 const cloudinary = require("../config/cloudinary");
 
-// Accept shop photos in memory for upload to Cloudinary.
+// Accept shop photos in memory for Cloudinary uploads.
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -28,7 +28,7 @@ const upload = multer({
   },
 });
 
-// Upload a buffer to Cloudinary.
+// Upload an image buffer to Cloudinary.
 function uploadToCloudinary(buffer) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -36,8 +36,16 @@ function uploadToCloudinary(buffer) {
         folder: "snipsnap/shops",
         resource_type: "image",
       },
-      (error, result) => {
-        if (error) return reject(error);
+      (err, result) => {
+        if (err) {
+          console.error("Cloudinary upload failed:", {
+            name: err.name,
+            message: err.message,
+            http_code: err.http_code,
+          });
+
+          return reject(err);
+        }
 
         if (!result || !result.secure_url) {
           return reject(
@@ -49,6 +57,7 @@ function uploadToCloudinary(buffer) {
       }
     );
 
+    stream.on("error", reject);
     stream.end(buffer);
   });
 }
@@ -60,7 +69,11 @@ router.post(
     upload.single("shopImage")(req, res, (err) => {
       if (!err) return next();
 
-      console.error("Shop image upload validation failed:", err);
+      console.error("Shop photo validation failed:", {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+      });
 
       if (err instanceof multer.MulterError) {
         const message =
@@ -96,11 +109,16 @@ router.post(
 
       // Validate required fields.
       if (
-        !name?.trim() ||
-        !email?.trim() ||
+        typeof name !== "string" ||
+        !name.trim() ||
+        typeof email !== "string" ||
+        !email.trim() ||
+        typeof password !== "string" ||
         !password ||
-        !location?.trim() ||
-        !city?.trim() ||
+        typeof location !== "string" ||
+        !location.trim() ||
+        typeof city !== "string" ||
+        !city.trim() ||
         latitude === undefined ||
         latitude === "" ||
         longitude === undefined ||
@@ -132,7 +150,7 @@ router.post(
 
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Check whether this email is already registered.
+      // Check for an existing shop account.
       const existingShop = await Shop.findOne({
         email: normalizedEmail,
       });
@@ -144,7 +162,7 @@ router.post(
         });
       }
 
-      // Upload the selected photo to Cloudinary.
+      // Upload the selected photo, if provided.
       let imagePath = "";
 
       if (req.file) {
@@ -152,12 +170,13 @@ router.post(
         imagePath = result.secure_url;
       }
 
-      // Save the shop.
+      // Save the new shop.
       const newShop = new Shop({
         name: name.trim(),
-        owner_name: owner_name?.trim() || "",
+        owner_name:
+          typeof owner_name === "string" ? owner_name.trim() : "",
         email: normalizedEmail,
-        phone: phone?.trim() || "",
+        phone: typeof phone === "string" ? phone.trim() : "",
         password,
         location: location.trim(),
         city: city.trim(),
@@ -177,10 +196,11 @@ router.post(
         image: newShop.image,
       });
     } catch (err) {
-      // Log the actual cause in server/Vercel logs.
+      // Log the actual error for diagnosis in Vercel runtime logs.
       console.error("Shop registration failed:", {
         name: err.name,
         message: err.message,
+        http_code: err.http_code,
         code: err.code,
         stack: err.stack,
       });
