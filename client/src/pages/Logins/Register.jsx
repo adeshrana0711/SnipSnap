@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -168,9 +167,9 @@ const Register = () => {
       const result = contentType.includes("application/json")
         ? await response.json()
         : {
-            success: false,
-            message: await response.text(),
-          };
+          success: false,
+          message: await response.text(),
+        };
 
       if (!response.ok || !result.success) {
         throw new Error(
@@ -342,7 +341,7 @@ const Register = () => {
                 id="shopImage"
                 type="file"
                 name="shopImage"
-                accept="image/jpeg,image/png,image/webp"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                 onChange={handleFileChange}
                 required
               />
