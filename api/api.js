@@ -7,20 +7,15 @@ module.exports = (req, res) => {
 
     let pathname = parsedUrl.pathname;
 
-    // Vercel may route /api/api/client/... to this function.
-    // Remove the function-routing prefix and normalize the path.
-    while (pathname.startsWith("/api/")) {
+    // Remove the API prefix if Vercel passes it to the function.
+    if (pathname === "/api") {
+      pathname = "/";
+    } else if (pathname.startsWith("/api/")) {
       pathname = pathname.substring(4);
     }
 
-    if (pathname === "/api") {
-      pathname = "/";
-    }
+    const queryString = parsedUrl.searchParams.toString();
 
-    const query = parsedUrl.searchParams;
-    query.delete("path");
-
-    const queryString = query.toString();
     req.url = pathname + (queryString ? `?${queryString}` : "");
 
     console.log("Incoming Vercel URL:", incomingUrl);
@@ -38,7 +33,7 @@ module.exports = (req, res) => {
     if (!res.headersSent) {
       return res.status(500).json({
         success: false,
-        message: "Internal server error",
+        message: "Internal server error"
       });
     }
   }

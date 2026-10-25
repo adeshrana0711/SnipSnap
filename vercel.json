@@ -16,8 +16,20 @@
       "destination": "/api/api.js"
     },
     {
+      "source": "/shop/dashboard",
+      "destination": "/index.html"
+    },
+    {
       "source": "/shop/:path*",
       "destination": "/api/api.js"
+    },
+    {
+      "source": "/client/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/client/registration",
+      "destination": "/index.html"
     },
     {
       "source": "/client/:path*",
