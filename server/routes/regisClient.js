@@ -1,8 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
-
 const Client = require("../models/Client");
+
+// Test endpoint: GET /client/registration-test
+router.get("/registration-test", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "Client registration route is working.",
+  });
+});
 
 // POST /client/registration
 router.post("/registration", async (req, res) => {
@@ -27,7 +34,7 @@ router.post("/registration", async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check for an existing account
+    // Check for existing account
     const existingClient = await Client.findOne({
       email: normalizedEmail,
     });
@@ -39,9 +46,10 @@ router.post("/registration", async (req, res) => {
       });
     }
 
-    // Hash password before saving
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // Create client
     const newClient = new Client({
       name: name.trim(),
       email: normalizedEmail,
