@@ -5,183 +5,301 @@ const Shop = require("../models/Shop");
 const Barber = require("../models/Barber");
 const auth = require("../middlewares/auth");
 
-router.get("/shops", async (req, res) => {
-
-  try {
-
-    const shops = await Shop.find();
-
-    const result = shops.map(shop => {
-
-      const open = isShopOpen(
-        shop.availability?.openTime,
-        shop.availability?.closeTime
-      );
-
-      return {
-        _id: shop._id,
-        name: shop.name,
-        location: shop.location,
-        image: shop.image,
-        status: open ? "Open" : "Closed"
-      };
-
-    });
-
-    res.json(result);
-
-  } catch (error) {
-
-    console.error(error);
-    res.status(500).send("Server Error");
-
-  }
-
-});
-
+// Check whether a shop is currently open.
+// Supports availability.openTime/closeTime and workingHours.open/close.
 function isShopOpen(open, close) {
-
-  if (!open || !close) {
+  if (
+    typeof open !== "string" ||
+    typeof close !== "string" ||
+    !/^\d{1,2}:\d{2}$/.test(open) ||
+    !/^\d{1,2}:\d{2}$/.test(close)
+  ) {
     return false;
   }
 
-  const [openH, openM] = open.split(":").map(Number);
-  const [closeH, closeM] = close.split(":").map(Number);
+  const [openHour, openMinute] = open.split(":").map(Number);
+  const [closeHour, closeMinute] = close.split(":").map(Number);
+
+  if (
+    openHour > 23 ||
+    closeHour > 23 ||
+    openMinute > 59 ||
+    closeMinute > 59
+  ) {
+    return false;
+  }
 
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const openMinutes = openH * 60 + openM;
-  const closeMinutes = closeH * 60 + closeM;
+  const openingMinutes = openHour * 60 + openMinute;
+  const closingMinutes = closeHour * 60 + closeMinute;
 
-  return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+  // Handles normal hours and overnight hours.
+  if (openingMinutes <= closingMinutes) {
+    return (
+      currentMinutes >= openingMinutes &&
+      currentMinutes < closingMinutes
+    );
+  }
 
+  return (
+    currentMinutes >= openingMinutes ||
+    currentMinutes < closingMinutes
+  );
 }
 
-router.post("/availability", auth("shop"), async (req, res) => {
-
+// GET /shop/shops
+// Public route: return all shops.
+router.get("/shops", async (req, res) => {
   try {
+    console.log("[GET /shop/shops] Fetching shops");
 
+    const shops = await Shop.find({}).lean();
+
+    const result = shops.map((shop) => {
+      const openTime =
+        shop.availability?.openTime ||
+        shop.workingHours?.open ||
+        shop.workingHours?.start ||
+        "";
+
+      const closeTime =
+        shop.availability?.closeTime ||
+        shop.workingHours?.close ||
+        shop.workingHours?.end ||
+        "";
+
+      return {
+        _id: shop._id,
+        name: shop.name || "",
+        owner_name: shop.owner_name || "",
+        location: shop.location || "",
+        city: shop.city || "",
+        image: shop.image || "",
+        phone: shop.phone || "",
+        availability: shop.availability || {},
+        workingHours: shop.workingHours || {},
+        status: isShopOpen(openTime, closeTime) ? "Open" : "Closed",
+      };
+    });
+
+    console.log(`[GET /shop/shops] Found ${result.length} shops`);
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("[GET /shop/shops] Failed:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch shops.",
+      // Keep the detailed error in server logs, not the public response.
+    });
+  }
+});
+
+// GET /shop/:id/data
+// Fetch one shop and its barbers.
+router.get("/:id/data", async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.id).lean();
+
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found.",
+      });
+    }
+
+    const barbers = await Barber.find({
+      shop: req.params.id,
+    }).lean();
+
+    return res.status(200).json({
+      shop,
+      barbers,
+    });
+  } catch (error) {
+    console.error("[GET /shop/:id/data] Failed:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch shop details.",
+    });
+  }
+});
+
+// POST /shop/availability
+router.post("/availability", auth("shop"), async (req, res) => {
+  try {
     const { openTime, closeTime } = req.body;
 
-    await Shop.findByIdAndUpdate(req.user.id, {
-      availability: {
-        openTime,
-        closeTime
-      }
+    if (!openTime || !closeTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Opening and closing times are required.",
+      });
+    }
+
+    const shop = await Shop.findByIdAndUpdate(
+      req.user.id,
+      {
+        $set: {
+          "availability.openTime": openTime,
+          "availability.closeTime": closeTime,
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Availability saved.",
+      availability: shop.availability,
     });
-
-    res.json({ message: "Availability saved" });
-
   } catch (error) {
+    console.error("[POST /shop/availability] Failed:", error);
 
-    console.error(error);
-    res.status(500).send("Server Error");
-
+    return res.status(500).json({
+      success: false,
+      message: "Unable to save shop availability.",
+    });
   }
-
 });
 
-router.get("/:id/data", async (req, res) => {
-
-  try {
-
-    const shop = await Shop.findById(req.params.id);
-    const barbers = await Barber.find({ shop: req.params.id });
-
-    res.json({ shop, barbers });
-
-  } catch (error) {
-
-    console.error(error);
-    res.status(500).send("Server Error");
-
-  }
-
-});
-
+// POST /shop/timing
 router.post("/timing", auth("shop"), async (req, res) => {
-
   try {
-
     const { open, close, slotDuration } = req.body;
 
-    await Shop.findByIdAndUpdate(req.user.id, {
-      workingHours: {
-        open,
-        close
-      },
-      slotDuration
+    if (!open || !close) {
+      return res.status(400).json({
+        success: false,
+        message: "Opening and closing times are required.",
+      });
+    }
+
+    const update = {
+      "workingHours.open": open,
+      "workingHours.close": close,
+    };
+
+    if (slotDuration !== undefined) {
+      const duration = Number(slotDuration);
+
+      if (!Number.isFinite(duration) || duration <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Slot duration must be a positive number.",
+        });
+      }
+
+      update.slotDuration = duration;
+    }
+
+    const shop = await Shop.findByIdAndUpdate(
+      req.user.id,
+      { $set: update },
+      { new: true, runValidators: true }
+    );
+
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Shop timing updated.",
+      workingHours: shop.workingHours,
+      slotDuration: shop.slotDuration,
     });
-
-    res.json({ message: "Timing Updated" });
-
   } catch (error) {
+    console.error("[POST /shop/timing] Failed:", error);
 
-    console.error(error);
-    res.status(500).send("Server Error");
-
+    return res.status(500).json({
+      success: false,
+      message: "Unable to update shop timing.",
+    });
   }
-
 });
 
+// PATCH /shop/hours
 router.patch("/hours", auth("shop"), async (req, res) => {
-
   try {
-
     const { start, end } = req.body;
 
     if (!start || !end) {
-      return res.status(400).send("Working hours required");
+      return res.status(400).json({
+        success: false,
+        message: "Start and end times are required.",
+      });
     }
 
-    const shop = await Shop.findById(req.user.id);
+    const shop = await Shop.findByIdAndUpdate(
+      req.user.id,
+      {
+        $set: {
+          "workingHours.start": start,
+          "workingHours.end": end,
+        },
+      },
+      { new: true, runValidators: true }
+    );
 
     if (!shop) {
-      return res.status(404).send("Shop not found");
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found.",
+      });
     }
 
-    if (!shop.workingHours) {
-      shop.workingHours = {};
-    }
-
-    shop.workingHours.start = start;
-    shop.workingHours.end = end;
-
-    await shop.save();
-
-    res.json({
-      message: "Shop hours updated",
-      workingHours: shop.workingHours
+    return res.status(200).json({
+      success: true,
+      message: "Shop hours updated.",
+      workingHours: shop.workingHours,
     });
-
   } catch (error) {
+    console.error("[PATCH /shop/hours] Failed:", error);
 
-    console.error(error);
-    res.status(500).send("Server Error");
-
+    return res.status(500).json({
+      success: false,
+      message: "Unable to update shop hours.",
+    });
   }
 });
 
-router.get("/profile", auth("shop"), async (req,res)=>{
+// GET /shop/profile
+router.get("/profile", auth("shop"), async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.user.id).lean();
 
-    try{
-
-        const shop = await Shop.findById(req.user.id);
-
-        if(!shop){
-            return res.status(404).json({error:"Shop not found"});
-        }
-
-        res.json(shop);
-
-    }catch(err){
-
-        console.error(err);
-        res.status(500).json({error:"Server error"});
-
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found.",
+      });
     }
 
+    return res.status(200).json(shop);
+  } catch (error) {
+    console.error("[GET /shop/profile] Failed:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch shop profile.",
+    });
+  }
 });
 
+// IMPORTANT: Keep this after the more specific routes.
 module.exports = router;
