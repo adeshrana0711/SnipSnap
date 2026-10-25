@@ -51,7 +51,7 @@ const ClientRegister = () => {
     setLoading(true);
 
     try {
-      const response = await api.post("/client/registration", {
+      const response = await api.post("/api/client/registration", {
         name: trimmedName,
         email: normalizedEmail,
         password,
