@@ -127,6 +127,7 @@ app.use("/uploads", express.static("public/uploads"));
 
 // Main routes
 app.use("/api/barbers", barberRoutes);
+app.use("/barbers", barberRoutes);
 
 // Support both /api/shop/... and /shop/... paths.
 
