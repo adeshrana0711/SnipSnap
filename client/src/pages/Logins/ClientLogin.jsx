@@ -35,7 +35,7 @@ const ClientLogin = () => {
         ? await res.json()
         : { message: await res.text() };
 
-      if (!res.ok || !result.success) {
+      if (!res.ok || result.success === false) {
         throw new Error(
           result.message || `Login failed (${res.status})`
         );
@@ -47,7 +47,7 @@ const ClientLogin = () => {
       // Only allow internal application paths.
       const nextUrl =
         requestedUrl.startsWith("/") &&
-        !requestedUrl.startsWith("//")
+          !requestedUrl.startsWith("//")
           ? requestedUrl
           : "/";
 
