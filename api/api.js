@@ -7,14 +7,16 @@ module.exports = (req, res) => {
 
     let pathname = parsedUrl.pathname;
 
-    // Remove /api only if it is the first path segment.
-    if (pathname === "/api") {
-      pathname = "/";
-    } else if (pathname.startsWith("/api/")) {
+    // Vercel may route /api/api/client/... to this function.
+    // Remove the function-routing prefix and normalize the path.
+    while (pathname.startsWith("/api/")) {
       pathname = pathname.substring(4);
     }
 
-    // Preserve normal query parameters.
+    if (pathname === "/api") {
+      pathname = "/";
+    }
+
     const query = parsedUrl.searchParams;
     query.delete("path");
 
