@@ -6,26 +6,23 @@ module.exports = (req, res) => {
 
     console.log("Incoming Vercel URL:", incomingUrl);
 
-    // Extract the pathname, excluding query parameters.
-    let pathname;
+    // Vercel may supply a path query parameter when rewriting.
+    const parsedUrl = new URL(incomingUrl, "http://localhost");
 
-    try {
-      pathname = new URL(incomingUrl, "http://localhost").pathname;
-    } catch {
-      pathname = incomingUrl.split("?")[0];
+    let pathname = parsedUrl.pathname;
+
+    // Remove the /api prefix only once.
+    if (pathname === "/api") {
+      pathname = "/";
+    } else if (pathname.startsWith("/api/")) {
+      pathname = pathname.substring(4);
     }
 
-    // Remove /api only when it is a leading path segment.
-    if (/^\/api(?:\/|$)/.test(pathname)) {
-      pathname = pathname.replace(/^\/api(?=\/|$)/, "") || "/";
-    }
+    // Remove the internal routing query parameter.
+    parsedUrl.searchParams.delete("path");
 
-    // Preserve the original query string.
-    const queryIndex = incomingUrl.indexOf("?");
-    const queryString =
-      queryIndex >= 0 ? incomingUrl.substring(queryIndex) : "";
-
-    req.url = pathname + queryString;
+    const queryString = parsedUrl.searchParams.toString();
+    req.url = pathname + (queryString ? `?${queryString}` : "");
 
     console.log("Forwarding to Express:", req.method, req.url);
 
